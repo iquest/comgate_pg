@@ -177,6 +177,40 @@ transfers.each do |transfer|
 end
 ```
 
+### Get Single Transfer Details
+
+```ruby
+# Get detailed information for a specific transfer
+# (transferId obtained from transfer_list)
+details = client.single_transfer(transfer_id: "1234567")
+
+# Response is an array with detailed transfer data:
+# [
+#   {
+#     typ: 1,
+#     Merchant: "123456",
+#     "Datum zalozeni": "2023-01-06 14:11:30",
+#     "Datum zaplaceni": "2023-01-06 14:21:30",
+#     "Datum prevodu": "2023-01-10",
+#     "ID Comgate": "AB12-CD34-EF56",
+#     Metoda: "Card payment",
+#     Popis: "Order #123",
+#     "E-mail platce": "customer@example.com",
+#     "Variabilni symbol platce": "123456789",
+#     "Variabilni symbol prevodu": "987654321",
+#     "ID od klienta": "order-123",
+#     Mena: "CZK",
+#     "Potvrzena castka": "100.00",
+#     "Prevedena castka": "98.50",
+#     "Poplatek celkem": "1.50"
+#   }
+# ]
+
+details.first.each do |key, value|
+  puts "#{key}: #{value}"
+end
+```
+
 ## Error Handling
 
 ```ruby
@@ -231,7 +265,10 @@ Each endpoint has a dedicated test script you can run directly:
 ./script/test_cancel_payment.rb AB12-CD34-EF56
 
 # List transfers for a date
-COMGATE_TEST_DATE=2026-02-10 ./script/test_transfer_list.rb
+./script/test_transfer_list.rb 2026-02-10
+
+# Get single transfer details (requires transfer ID from transfer_list)
+./script/test_single_transfer.rb 1234567
 ```
 
 ### Rake Tasks
@@ -245,15 +282,18 @@ bundle exec rake comgate:list
 # Test payment creation
 bundle exec rake comgate:test_create_payment
 
-# Test payment status
-bundle exec rake comgate:test_payment_status TRANS_ID=AB12-CD34-EF56
+# Test payment status (pass transaction ID)
+bundle exec rake comgate:test_payment_status[AB12-CD34-EF56]
 
-# Test payment cancellation
-bundle exec rake comgate:test_cancel_payment TRANS_ID=AB12-CD34-EF56
+# Test payment cancellation (pass transaction ID)
+bundle exec rake comgate:test_cancel_payment[AB12-CD34-EF56]
 
-# Test transfer list
+# Test transfer list (optionally pass date)
 bundle exec rake comgate:test_transfer_list
-bundle exec rake comgate:test_transfer_list COMGATE_TEST_DATE=2026-02-10
+bundle exec rake comgate:test_transfer_list[2026-02-10]
+
+# Test single transfer details (pass transfer ID)
+bundle exec rake comgate:test_single_transfer[1234567]
 ```
 
 ### RSpec Tests
@@ -264,11 +304,14 @@ Run the test suite:
 bundle exec rspec
 ```
 
-Run specific tests:
+Run specific test files:
 
 ```bash
-bundle exec rspec spec/comgate_api/create_payment_spec.rb
-bundle exec rspec spec/comgate_api/cancel_payment_spec.rb
+# Run all client endpoint tests
+bundle exec rspec spec/comgate_api/client_spec.rb
+
+# Run request validation specs
+bundle exec rspec spec/comgate_api/requests/
 ```
 
 ### Debugging with rdbg
@@ -285,8 +328,10 @@ bundle exec rdbg ./bin/console
 
 - Set `COMGATE_TEST=true` to automatically add `test=true` to all requests
 - Use Comgate sandbox credentials for integration testing
-- Test payments with `test=true` won't charge real money
+- Test mode returns predefined sample responses
+- Test payments with `test=true` won't charge real money and won't generate real transfers
 - Minimum payment amount: 100 haléř = 1 CZK
+- Transfers settle on the next business day (payment on Feb 11 → transfer on Feb 12)
 
 ## API Reference
 
@@ -298,6 +343,26 @@ bundle exec rdbg ./bin/console
 | `payment_status` | `GET /v2.0/payment/transId/{transId}.json` | Get payment status |
 | `cancel_payment` | `DELETE /v2.0/payment/transId/{transId}.json` | Cancel pending payment |
 | `transfer_list` | `GET /v2.0/transferList/date/{date}.json` | List transfers for date |
+| `single_transfer` | `GET /v2.0/singleTransfer/transferId/{transferId}.json` | Get detailed transfer info |
+
+### Request Validation
+
+All requests use `dry-struct` for type validation and coercion:
+- Automatic `snake_case` → `camelCase` conversion
+- Type coercion (strings, integers, booleans)
+- Basic structural constraints (label length, minimum price)
+- API validates specific values (currencies, countries, etc.)
+
+Example validation:
+```ruby
+# This will raise ArgumentError before making the API call
+client.create_payment(
+  price: 50,  # Fails: minimum is 100 (1 CZK)
+  curr: "CZK",
+  label: "A" * 20,  # Fails: maximum 16 characters
+  ref_id: "order-1"
+)
+```
 
 ### Payment Methods
 
