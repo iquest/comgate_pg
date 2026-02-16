@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description = "A Ruby wrapper for the Comgate payment gateway API."
   spec.homepage = "https://apidoc.comgate.cz/en/uvod/"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 4.0.0"
+  spec.required_ruby_version = ">= 3.2"
 
   spec.files = Dir.chdir(__dir__) do
     Dir["{bin,lib}/**/*", "LICENSE", "README.md"]
